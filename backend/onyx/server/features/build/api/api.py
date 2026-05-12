@@ -26,6 +26,9 @@ from onyx.db.enums import SharingScope
 from onyx.db.index_attempt import get_latest_index_attempt_for_cc_pair_id
 from onyx.db.models import BuildSession
 from onyx.db.models import User
+from onyx.server.features.build.api.external_apps_api import (
+    router as external_apps_router,
+)
 from onyx.server.features.build.api.messages_api import router as messages_router
 from onyx.server.features.build.api.models import BuildConnectorInfo
 from onyx.server.features.build.api.models import BuildConnectorListResponse
@@ -67,6 +70,7 @@ router = APIRouter(prefix="/build", dependencies=[Depends(require_onyx_craft_ena
 router.include_router(sessions_router, tags=["build"])
 router.include_router(messages_router, tags=["build"])
 router.include_router(user_library_router, tags=["build"])
+router.include_router(external_apps_router, tags=["build"])
 
 
 # -----------------------------------------------------------------------------
