@@ -25,7 +25,7 @@ jobs:
       contents: read
       id-token: write # Required for OIDC-based AWS credential exchange
     steps:
-      - uses: runs-on/action@cd2b598b0515d39d78c38a02d529db87d2196d1e
+      - uses: runs-on/action@e46a3c6d62a5df0b0e0f8b5fdc50f04c5ecf147f
 
       - name: Checkout code
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
