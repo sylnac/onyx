@@ -1,0 +1,112 @@
+version: "3.8"
+
+# Development docker-compose for Onyx fork
+# Use with: docker-compose -f docker-compose.dev.yml up
+
+services:
+  # PostgreSQL database
+  db:
+    image: postgres:15-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-onyx}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-onyx_dev_password}
+      POSTGRES_DB: ${POSTGRES_DB:-onyx_db}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-onyx}"]  
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis for caching and task queue
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Vespa vector search engine
+  vespa:
+    image: vespaengine/vespa:8
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+      - "19071:19071"
+    volumes:
+      - vespa_data:/opt/vespa/var
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:19071/state/v1/health || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
+
+  # Onyx API backend
+  api_server:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      target: dev
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      vespa:
+        condition: service_healthy
+    environment:
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-onyx}:${POSTGRES_PASSWORD:-onyx_dev_password}@db:5432/${POSTGRES_DB:-onyx_db}
+      - REDIS_URL=redis://redis:6379
+      - VESPA_HOST=vespa
+      - VESPA_PORT=8080
+      - AUTH_TYPE=${AUTH_TYPE:-disabled}
+      - SECRET_KEY=${SECRET_KEY:-dev_secret_key_change_in_production}
+      - LOG_LEVEL=${LOG_LEVEL:-DEBUG}
+      - WEB_DOMAIN=${WEB_DOMAIN:-http://localhost:3000}
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./backend:/app
+      - /app/__pycache__
+    command: uvicorn main:app --host 0.0.0.0 --port 8080 --reload
+
+  # Onyx web frontend
+  web_server:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+      target: dev
+    restart: unless-stopped
+    depends_on:
+      - api_server
+    environment:
+      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:8080}
+      - NEXTAUTH_URL=${NEXTAUTH_URL:-http://localhost:3000}
+      - NEXTAUTH_SECRET=${NEXTAUTH_SECRET:-dev_nextauth_secret}
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./web:/app
+      - /app/node_modules
+      - /app/.next
+
+volumes:
+  postgres_data:
+  redis_data:
+  vespa_data:
+
+networks:
+  default:
+    name: onyx_dev_network
